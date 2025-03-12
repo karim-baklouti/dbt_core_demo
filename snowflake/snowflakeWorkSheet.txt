@@ -1,0 +1,78 @@
+JAFFLE_RAW--create warehouse
+USE ROLE SYSADMIN;
+CREATE or replace WAREHOUSE JAFFLE_WH;
+
+
+--create database
+CREATE or replace DATABASE jaffle_analytics;
+CREATE or replace DATABASE jaffle_raw;
+
+----
+USE ROLE SYSADMIN;
+ALTER WAREHOUSE "JAFFLE_WH" SET
+    WAREHOUSE_SIZE = 'XSMALL'
+    AUTO_SUSPEND = 60
+    AUTO_RESUME = TRUE
+    COMMENT = 'Default Warehouse';
+
+
+
+--schema in the raw database
+CREATE or replace schema jaffle_raw.jaffle_shop;
+CREATE or replace schema jaffle_raw.stripe;
+
+
+--create the table in the raw layer
+CREATE or replace table jaffle_raw.jaffle_shop.customers 
+( id integer,
+  first_name varchar,
+  last_name varchar
+);
+
+--load data into to using copy into from public s3 bucket
+copy into jaffle_raw.jaffle_shop.customers (id, first_name, last_name)
+from 's3://dbt-tutorial-public/jaffle_shop_customers.csv'
+file_format = (
+    type = 'CSV'
+    field_delimiter = ','
+    skip_header = 1
+    ); 
+
+--orders table
+create table jaffle_raw.jaffle_shop.orders
+( id integer,
+  user_id integer,
+  order_date date,
+  status varchar,
+  _etl_loaded_at timestamp default current_timestamp
+);
+copy into jaffle_raw.jaffle_shop.orders (id, user_id, order_date, status)
+from 's3://dbt-tutorial-public/jaffle_shop_orders.csv'
+file_format = (
+    type = 'CSV'
+    field_delimiter = ','
+    skip_header = 1
+    );
+--payments table
+
+create table jaffle_raw.stripe.payment 
+( id integer,
+  orderid integer,
+  paymentmethod varchar,
+  status varchar,
+  amount integer,
+  created date,
+  _batched_at timestamp default current_timestamp
+);
+
+copy into jaffle_raw.stripe.payment (id, orderid, paymentmethod, status, amount, created)
+from 's3://dbt-tutorial-public/stripe_payments.csv'
+file_format = (
+    type = 'CSV'
+    field_delimiter = ','
+    skip_header = 1
+    );
+--verify the data
+select * from jaffle_raw.jaffle_shop.customers;
+select * from jaffle_raw.jaffle_shop.orders;
+select * from jaffle_raw.stripe.payment;
